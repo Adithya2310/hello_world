@@ -683,7 +683,7 @@ export function MintBurnPage() {
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-400">Collateral Released</span>
                       <span className="text-green-400">
-                        +{(burnValueUsd / adaPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })} ADA
+                        +{((burnValueUsd * 1.5) / adaPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })} ADA
                       </span>
                     </div>
                   </div>

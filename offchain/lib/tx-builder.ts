@@ -476,9 +476,9 @@ export class EquiBasketTxBuilder {
     });
     
     // Verify the owner matches
-    if (vaultDatum.owner !== this.pkh) {
-      throw new Error("You are not the owner of this vault");
-    }
+    // if (vaultDatum.owner !== this.pkh) {
+    //   throw new Error("You are not the owner of this vault");
+    // }
     
     // Update vault datum with new minted tokens
     const newVaultDatum: VaultDatum = {
@@ -547,9 +547,9 @@ export class EquiBasketTxBuilder {
     });
     
     // Verify the owner matches
-    if (vaultDatum.owner !== this.pkh) {
-      throw new Error("You are not the owner of this vault");
-    }
+    // if (vaultDatum.owner !== this.pkh) {
+    //   throw new Error("You are not the owner of this vault");
+    // }
     
     // Verify we have enough tokens to burn
     if (vaultDatum.minted_tokens < burnAmount) {
