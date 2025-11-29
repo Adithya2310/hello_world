@@ -10,23 +10,23 @@ import { Button, Card, CardTitle, Select, Input } from "@/components/ui";
 import { Tabs, TabsList, Tab, TabPanel } from "@/components/ui";
 import { TransactionStatus } from "@/components/shared/TransactionStatus";
 import { CollateralRatioBar } from "@/components/shared/CollateralRatioBar";
-import { EquiBasketTxBuilder, submitTx, log, lovelaceToAda, adaToLovelace } from "@/lib/tx-builder";
+import { EquiBasketTxBuilder, submitTx, log, lovelaceToAda, adaToLovelace, decodeBasketDatum, decodeVaultDatum } from "@/lib/tx-builder";
 import { tokenToUnits, TOKEN_DECIMALS } from "@/config/scripts";
 import type { TxStatus } from "@/types/equibasket";
 
 export function MintBurnPage() {
   const searchParams = useSearchParams();
   const [connection] = useWallet();
-  const { 
-    baskets, 
-    oraclePrices, 
-    userVaults, 
-    isLoading, 
+  const {
+    baskets,
+    oraclePrices,
+    userVaults,
+    isLoading,
     refreshVaults,
     addVault,
-    updateVaultPosition 
+    updateVaultPosition
   } = useDatabase();
-  
+
   const [txStatus, setTxStatus] = useState<TxStatus>({ status: "idle" });
 
   // Selected basket
@@ -36,7 +36,7 @@ export function MintBurnPage() {
   const [mintAmount, setMintAmount] = useState("");
   const [burnAmount, setBurnAmount] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
-  
+
   // Oracle status
   const [oracleDeployed, setOracleDeployed] = useState<boolean | null>(null);
   const [checkingOracle, setCheckingOracle] = useState(false);
@@ -62,7 +62,7 @@ export function MintBurnPage() {
   useEffect(() => {
     async function checkOracle() {
       if (!connection) return;
-      
+
       try {
         setCheckingOracle(true);
         const txBuilder = new EquiBasketTxBuilder(
@@ -80,7 +80,7 @@ export function MintBurnPage() {
         setCheckingOracle(false);
       }
     }
-    
+
     checkOracle();
   }, [connection]);
 
@@ -208,17 +208,44 @@ export function MintBurnPage() {
         throw new Error("Mint amount must be at least 0.000001 tokens.");
       }
 
-      // Use the LAST UTxOs (most recently deployed)
+      // Use the LAST oracle UTxO (most recently deployed)
       // Old UTxOs may have incorrect datum encoding from before the tuple fix
       const oracleUtxo = oracleUtxos[oracleUtxos.length - 1];
-      const basketUtxo = basketUtxos[basketUtxos.length - 1];
-      const vaultUtxo = vaultUtxos[vaultUtxos.length - 1];
-      
+
+      // Find the basket UTxO that matches the selected basket_id
+      const basketUtxo = basketUtxos.find((utxo) => {
+        if (!utxo.datum) return false;
+        try {
+          const datum = decodeBasketDatum(utxo.datum);
+          return datum.basket_id === selectedBasketId;
+        } catch {
+          return false;
+        }
+      });
+
+      if (!basketUtxo) {
+        throw new Error(`Basket UTxO not found for basket_id: ${selectedBasketId}`);
+      }
+
+      // Find the vault UTxO that matches the selected basket_id
+      const vaultUtxo = vaultUtxos.find((utxo) => {
+        if (!utxo.datum) return false;
+        try {
+          const datum = decodeVaultDatum(utxo.datum);
+          return datum.basket_id === selectedBasketId;
+        } catch {
+          return false;
+        }
+      });
+
+      if (!vaultUtxo) {
+        throw new Error(`Vault UTxO not found for basket_id: ${selectedBasketId}`);
+      }
+
+      console.log("basketUtxo.datum", basketUtxo.datum)
+
       if (oracleUtxos.length > 1) {
         log("warn", `Multiple oracle UTxOs found (${oracleUtxos.length}). Using most recent.`);
-      }
-      if (basketUtxos.length > 1) {
-        log("warn", `Multiple basket UTxOs found (${basketUtxos.length}). Using most recent.`);
       }
 
       const tx = await txBuilder.mintBasketTokens(
@@ -281,10 +308,38 @@ export function MintBurnPage() {
       if (oracleUtxos.length === 0) throw new Error("Oracle not found");
       if (basketUtxos.length === 0) throw new Error("Basket not found");
 
-      // Use the LAST UTxOs (most recently deployed)
+      // Use the LAST oracle UTxO (most recently deployed)
       const oracleUtxo = oracleUtxos[oracleUtxos.length - 1];
-      const basketUtxo = basketUtxos[basketUtxos.length - 1];
-      const vaultUtxo = vaultUtxos[vaultUtxos.length - 1];
+
+      // Find the basket UTxO that matches the selected basket_id
+      const basketUtxo = basketUtxos.find((utxo) => {
+        if (!utxo.datum) return false;
+        try {
+          const datum = decodeBasketDatum(utxo.datum);
+          return datum.basket_id === selectedBasketId;
+        } catch {
+          return false;
+        }
+      });
+
+      if (!basketUtxo) {
+        throw new Error(`Basket UTxO not found for basket_id: ${selectedBasketId}`);
+      }
+
+      // Find the vault UTxO that matches the selected basket_id
+      const vaultUtxo = vaultUtxos.find((utxo) => {
+        if (!utxo.datum) return false;
+        try {
+          const datum = decodeVaultDatum(utxo.datum);
+          return datum.basket_id === selectedBasketId;
+        } catch {
+          return false;
+        }
+      });
+
+      if (!vaultUtxo) {
+        throw new Error(`Vault UTxO not found for basket_id: ${selectedBasketId}`);
+      }
 
       const tx = await txBuilder.burnBasketTokens(
         vaultUtxo,

@@ -25,6 +25,15 @@ const ASSET_COLORS: Record<string, string> = {
   ADA: "#0033AD",
   LINK: "#2A5ADA",
   DOT: "#E6007A",
+  Gold: "#FFD700",
+  Silver: "#C0C0C0",
+  AAPL: "#A2AAAD",
+  MSFT: "#F25022",
+  GOOGL: "#4285F4",
+  AMZN: "#FF9900",
+  NVDA: "#76B900",
+  META: "#0668E1",
+  TSLA: "#E31937",
 };
 
 export function CreateBasketPage() {
@@ -91,7 +100,7 @@ export function CreateBasketPage() {
     try {
       // Step 1: Save to database first (optimistic)
       log("info", "Saving basket to database", { basketId, name: basketName, assets: selectedAssets });
-      
+
       const savedBasket = await addBasket({
         basketId,
         name: basketName,
@@ -99,12 +108,12 @@ export function CreateBasketPage() {
         assets: selectedAssets,
         creatorAddress: connection.address,
       });
-      
+
       log("info", "Basket saved to database", { id: savedBasket.id });
 
       // Step 2: Build and submit on-chain transaction
       setTxStatus({ status: "building", message: "Building transaction..." });
-      
+
       const txBuilder = new EquiBasketTxBuilder(
         connection.lucid,
         connection.address,
