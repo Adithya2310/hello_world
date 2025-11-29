@@ -44,20 +44,27 @@ validator vault(params: VaultParams) {
     own_ref: OutputReference,
     tx: Transaction,
   ) {
+    trace @"vault.spend: Starting vault validation"
     // Extract datum
     expect Some(vault_datum) = datum
+    trace @"Vault datum extracted successfully"
 
     when redeemer is {
       Deposit { amount } -> {
+        trace @"vault.Deposit: Starting deposit validation"
         // Anyone can deposit to their own vault, but only owner can operate
         let owner_signed = list.has(tx.extra_signatories, vault_datum.owner)
+        trace @"Owner signature verification completed"
         // Amount must be positive
         let amount_valid = amount > 0
+        trace @"Amount validation completed"
         // Find continuing output
         let continuing_output = find_continuing_vault(tx.outputs, own_ref, tx)
+        trace @"Continuing vault output found"
         // Validate deposit update
         let output_valid =
           validate_deposit(continuing_output, vault_datum, amount)
+        trace @"Deposit output validation completed"
         and {
           owner_signed?,
           amount_valid?,
@@ -66,42 +73,52 @@ validator vault(params: VaultParams) {
       }
 
       Withdraw { amount } -> {
+        trace @"vault.Withdraw: Starting withdrawal validation"
         // Only owner can withdraw
         let owner_signed = list.has(tx.extra_signatories, vault_datum.owner)
+        trace @"Owner signature verified"
         // Amount must be positive and <= available
         let amount_valid = and {
             amount > 0,
             amount <= vault_datum.collateral_ada,
           }
+        trace @"Withdrawal amount validated"
         // Get oracle price from reference inputs (filter by oracle script hash)
         let oracle_datum =
           get_oracle_datum(tx.reference_inputs, params.oracle_script_hash)
+        trace @"Oracle datum retrieved"
         let basket_datum =
           get_basket_datum(
             tx.reference_inputs,
             params.basket_factory_script_hash,
             vault_datum.basket_id,
           )
+        trace @"Basket datum retrieved"
         let basket_price =
           calculate_basket_price(oracle_datum.prices, basket_datum.assets)
+        trace @"Basket price calculated"
         // Calculate remaining collateral value
         let remaining_collateral = vault_datum.collateral_ada - amount
         // Calculate minted value (tokens * basket_price)
         let minted_value =
           vault_datum.minted_tokens * basket_price / price_precision
+        trace @"Collateral health check starting"
         // Must remain healthy after withdrawal
         let remains_healthy = or {
             vault_datum.minted_tokens == 0,
             is_healthy(remaining_collateral, minted_value),
           }
+        trace @"Health check completed"
         // Must maintain minimum collateral if position still exists
         let min_collateral_ok = or {
             remaining_collateral == 0,
             remaining_collateral >= min_collateral,
           }
+        trace @"Minimum collateral check completed"
         // Find continuing output (or allow closing if empty)
         let output_valid =
           validate_withdrawal(tx.outputs, own_ref, tx, vault_datum, amount)
+        trace @"Withdrawal output validation completed"
         and {
           owner_signed?,
           amount_valid?,
@@ -112,33 +129,44 @@ validator vault(params: VaultParams) {
       }
 
       Mint { amount } -> {
+        trace @"vault.Mint: Starting mint validation"
         // Only owner can mint
         let owner_signed = list.has(tx.extra_signatories, vault_datum.owner)
+        trace @"Owner signature verified"
         // Amount must be positive
         let amount_valid = amount > 0
+        trace @"Mint amount validated"
         // Get oracle price (filter by oracle script hash)
         let oracle_datum =
           get_oracle_datum(tx.reference_inputs, params.oracle_script_hash)
+        trace @"Oracle datum retrieved"
         let basket_datum =
           get_basket_datum(
             tx.reference_inputs,
             params.basket_factory_script_hash,
             vault_datum.basket_id,
           )
+        trace @"Basket datum retrieved"
         let basket_price =
           calculate_basket_price(oracle_datum.prices, basket_datum.assets)
+        trace @"Basket price calculated"
         // Calculate new minted value
         let new_minted_tokens = vault_datum.minted_tokens + amount
         let minted_value = new_minted_tokens * basket_price / price_precision
+        trace @"Checking collateralization ratio"
         // Check collateral ratio
         let is_collateralized =
           is_healthy(vault_datum.collateral_ada, minted_value)
+        trace @"Collateralization check completed"
         // Verify tokens are actually minted in this transaction
         let tokens_minted =
           verify_tokens_minted(tx, vault_datum.basket_id, amount)
+        trace @"Token minting verified in transaction"
         // Verify continuing output
         let continuing_output = find_continuing_vault(tx.outputs, own_ref, tx)
+        trace @"Continuing vault output found"
         let output_valid = validate_mint(continuing_output, vault_datum, amount)
+        trace @"Mint output validation completed"
         and {
           owner_signed?,
           amount_valid?,
@@ -149,19 +177,24 @@ validator vault(params: VaultParams) {
       }
 
       Burn { amount } -> {
+        trace @"vault.Burn: Starting burn validation"
         // Only owner can burn
         let owner_signed = list.has(tx.extra_signatories, vault_datum.owner)
+        trace @"Owner signature verified"
         // Amount must be positive and <= minted
         let amount_valid = and {
             amount > 0,
             amount <= vault_datum.minted_tokens,
           }
+        trace @"Burn amount validated"
         // Verify tokens are actually burned in this transaction
         let tokens_burned =
           verify_tokens_burned(tx, vault_datum.basket_id, amount)
+        trace @"Token burning verified in transaction"
         // Validate continuing output (or closure if all burned)
         let output_valid =
           validate_burn(tx.outputs, own_ref, tx, vault_datum, amount)
+        trace @"Burn output validation completed"
         and {
           owner_signed?,
           amount_valid?,
@@ -171,23 +204,29 @@ validator vault(params: VaultParams) {
       }
 
       Liquidate -> {
+        trace @"vault.Liquidate: Starting liquidation validation"
         // Get oracle price (filter by oracle script hash)
         let oracle_datum =
           get_oracle_datum(tx.reference_inputs, params.oracle_script_hash)
+        trace @"Oracle datum retrieved"
         let basket_datum =
           get_basket_datum(
             tx.reference_inputs,
             params.basket_factory_script_hash,
             vault_datum.basket_id,
           )
+        trace @"Basket datum retrieved"
         let basket_price =
           calculate_basket_price(oracle_datum.prices, basket_datum.assets)
+        trace @"Basket price calculated"
         // Calculate current minted value
         let minted_value =
           vault_datum.minted_tokens * basket_price / price_precision
+        trace @"Checking if position is undercollateralized"
         // Position must be unhealthy (undercollateralized)
         let is_undercollateralized =
           !is_healthy(vault_datum.collateral_ada, minted_value)
+        trace @"Undercollateralization check completed"
         // Verify liquidator burns the tokens
         let tokens_burned =
           verify_tokens_burned(
@@ -195,10 +234,12 @@ validator vault(params: VaultParams) {
             vault_datum.basket_id,
             vault_datum.minted_tokens,
           )
+        trace @"Token burning verified"
         // Verify liquidator receives collateral (at discount)
         let liq_value = liquidation_value(vault_datum.collateral_ada)
         let liquidator_paid =
           verify_liquidator_payment(tx, vault_datum.owner, liq_value)
+        trace @"Liquidator payment verified"
         // Position should be closed (no continuing output needed)
         and {
           is_undercollateralized?,
@@ -211,6 +252,7 @@ validator vault(params: VaultParams) {
 
   /// Fallback handler
   else(_) {
+    trace @"vault: Unsupported script purpose"
     fail @"Unsupported script purpose"
   }
 }

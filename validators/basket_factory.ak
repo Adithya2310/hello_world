@@ -25,22 +25,29 @@ validator basket_factory {
     own_ref: OutputReference,
     tx: Transaction,
   ) {
+    trace @"basket_factory.spend: Starting validation"
     // Extract datum
     expect Some(basket_datum) = datum
+    trace @"Basket datum extracted successfully"
 
     when redeemer is {
       CreateBasket -> {
+        trace @"CreateBasket: Validating new basket creation"
         // For creation, we're consuming a "seed" UTxO and creating basket UTxOs
         // This is typically done by consuming an empty/initialization UTxO
         // Verify basket weights are valid (sum to 100%)
         let weights_valid = sum_weights(basket_datum.assets) == weight_precision
+        trace @"Weight validation completed"
         // Verify basket has assets
         let has_assets = list.length(basket_datum.assets) > 0
+        trace @"Asset count validation completed"
         // Verify basket_id is not empty
         let has_id = basket_datum.basket_id != ""
+        trace @"Basket ID validation completed"
         // Verify creator signed the transaction
         let creator_signed =
           list.has(tx.extra_signatories, basket_datum.creator)
+        trace @"Creator signature validation completed"
         and {
           weights_valid?,
           has_assets?,
@@ -50,16 +57,21 @@ validator basket_factory {
       }
 
       UpdateBasket { new_weights } -> {
+        trace @"UpdateBasket: Validating basket weight update"
         // Only creator can update
         let creator_signed =
           list.has(tx.extra_signatories, basket_datum.creator)
+        trace @"Creator signature checked"
         // New weights must be valid
         let weights_valid = sum_weights(new_weights) == weight_precision
+        trace @"New weights validated"
         // Find continuing output
         let continuing_output = find_continuing_output(tx.outputs, own_ref, tx)
+        trace @"Continuing output found"
         // Validate continuing output
         let output_valid =
           validate_basket_update(continuing_output, basket_datum, new_weights)
+        trace @"Continuing output validated"
         and {
           creator_signed?,
           weights_valid?,
@@ -71,6 +83,7 @@ validator basket_factory {
 
   /// Fallback handler
   else(_) {
+    trace @"basket_factory: Unsupported script purpose"
     fail @"Unsupported script purpose"
   }
 }

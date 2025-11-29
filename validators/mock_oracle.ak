@@ -22,17 +22,23 @@ validator mock_oracle {
     own_ref: OutputReference,
     tx: Transaction,
   ) {
+    trace @"mock_oracle.spend: Starting validation"
     // Extract datum
     expect Some(oracle_datum) = datum
+    trace @"Oracle datum extracted successfully"
 
     when redeemer is {
       UpdatePrices { new_prices } -> {
+        trace @"UpdatePrices: Validating price update operation"
         // Only admin can update prices
         let admin_signed = list.has(tx.extra_signatories, oracle_datum.admin)
+        trace @"Admin signature verification completed"
         // Validate new prices are all positive
         let prices_valid = validate_prices(new_prices)
+        trace @"Price validation completed"
         // Find continuing output (oracle must persist)
         let continuing_output = find_continuing_output(tx.outputs, own_ref, tx)
+        trace @"Continuing output found"
         // Verify continuing output has updated datum
         let output_valid =
           validate_continuing_output(
@@ -40,6 +46,7 @@ validator mock_oracle {
             oracle_datum.admin,
             new_prices,
           )
+        trace @"Continuing output validated"
         and {
           admin_signed?,
           prices_valid?,
@@ -47,15 +54,18 @@ validator mock_oracle {
         }
       }
 
-      ReadPrice ->
+      ReadPrice -> {
+        trace @"ReadPrice: Rejecting consumption attempt"
         // ReadPrice should not consume the UTxO - always fail
         // Use reference inputs instead
         fail @"Use reference inputs to read oracle prices"
+      }
     }
   }
 
   /// Fallback handler for other script purposes
   else(_) {
+    trace @"mock_oracle: Unsupported script purpose"
     fail @"Unsupported script purpose"
   }
 }

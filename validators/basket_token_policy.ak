@@ -21,12 +21,15 @@ use types.{BurnTokens, MintAction, MintRedeemer, MintTokens, VaultDatum}
 validator basket_token_policy(vault_hash: ScriptHash) {
   /// Mint handler: validates minting and burning of basket tokens
   mint(redeemer: MintRedeemer, policy_id: PolicyId, tx: Transaction) {
+    trace @"basket_token_policy.mint: Starting validation"
     let MintRedeemer { action, vault_ref } = redeemer
 
+    trace @"Finding vault input that authorizes this mint/burn"
     // Find the vault input that authorizes this mint/burn
     expect Some(vault_input) =
       list.find(tx.inputs, fn(input) { input.output_reference == vault_ref })
 
+    trace @"Verifying input is from vault script"
     // Verify the input is from the vault script
     let is_vault_input =
       when vault_input.output.address.payment_credential is {
@@ -34,29 +37,41 @@ validator basket_token_policy(vault_hash: ScriptHash) {
         _ -> False
       }
 
+    trace @"Extracting vault datum"
     // Get vault datum
     expect InlineDatum(vault_data) = vault_input.output.datum
     expect vault_datum: VaultDatum = vault_data
 
     // Token name must match basket_id
     let expected_token_name = vault_datum.basket_id
+    trace @"Expected token name extracted from vault datum"
 
+    trace @"Extracting minted tokens from transaction"
     // Get minted tokens under this policy
     let minted_tokens = assets.tokens(tx.mint, policy_id)
     // Should have exactly one token type minted/burned
     let token_pairs = dict.to_pairs(minted_tokens)
     expect [Pair(token_name, quantity)] = token_pairs
 
+    trace @"Verifying token name matches basket_id"
     // Verify token name matches basket_id
     let name_matches = token_name == expected_token_name
 
+    trace @"Validating action matches quantity sign"
     // Verify action matches quantity sign
     let action_valid =
       when action is {
-        MintTokens -> quantity > 0
-        BurnTokens -> quantity < 0
+        MintTokens -> {
+          trace @"MintTokens action: Verifying positive quantity"
+          quantity > 0
+        }
+        BurnTokens -> {
+          trace @"BurnTokens action: Verifying negative quantity"
+          quantity < 0
+        }
       }
 
+    trace @"Completing validation checks"
     and {
       is_vault_input?,
       name_matches?,
@@ -66,6 +81,7 @@ validator basket_token_policy(vault_hash: ScriptHash) {
 
   /// Fallback handler
   else(_) {
+    trace @"basket_token_policy: Unsupported script purpose"
     fail @"Unsupported script purpose"
   }
 }
@@ -78,12 +94,15 @@ validator basket_token_policy(vault_hash: ScriptHash) {
 validator basket_token_policy_ref {
   /// Mint handler using reference inputs for vault verification
   mint(redeemer: MintRedeemer, policy_id: PolicyId, tx: Transaction) {
+    trace @"basket_token_policy_ref.mint: Starting validation"
     let MintRedeemer { action, vault_ref } = redeemer
 
+    trace @"Finding vault input"
     // Find the vault input
     expect Some(vault_input) =
       list.find(tx.inputs, fn(input) { input.output_reference == vault_ref })
 
+    trace @"Verifying input is from a script (vault)"
     // Verify input is from a script (vault)
     let is_script_input =
       when vault_input.output.address.payment_credential is {
@@ -91,28 +110,40 @@ validator basket_token_policy_ref {
         _ -> False
       }
 
+    trace @"Extracting vault datum"
     // Get vault datum
     expect InlineDatum(vault_data) = vault_input.output.datum
     expect vault_datum: VaultDatum = vault_data
 
     // Token name must match basket_id
     let expected_token_name = vault_datum.basket_id
+    trace @"Expected token name extracted"
 
+    trace @"Extracting minted tokens"
     // Get minted tokens
     let minted_tokens = assets.tokens(tx.mint, policy_id)
     let token_pairs = dict.to_pairs(minted_tokens)
     expect [Pair(token_name, quantity)] = token_pairs
 
+    trace @"Verifying token name"
     // Verify token name
     let name_matches = token_name == expected_token_name
 
+    trace @"Validating action"
     // Verify action
     let action_valid =
       when action is {
-        MintTokens -> quantity > 0
-        BurnTokens -> quantity < 0
+        MintTokens -> {
+          trace @"MintTokens: Checking positive quantity"
+          quantity > 0
+        }
+        BurnTokens -> {
+          trace @"BurnTokens: Checking negative quantity"
+          quantity < 0
+        }
       }
 
+    trace @"Completing validation"
     and {
       is_script_input?,
       name_matches?,
@@ -122,6 +153,7 @@ validator basket_token_policy_ref {
 
   /// Fallback handler
   else(_) {
+    trace @"basket_token_policy_ref: Unsupported script purpose"
     fail @"Unsupported script purpose"
   }
 }
